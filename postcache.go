@@ -62,7 +62,8 @@ func (c container) updateCache(hash string, body io.Reader) string {
 			return response
 		}
 		fmt.Println(repl)
-		return response
+	} else {
+		fmt.Println("backend request failure")
 	}
 	return response
 }
