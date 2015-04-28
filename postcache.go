@@ -44,10 +44,11 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 func (c container) updateCache(hash string, body io.Reader) string {
 	var response string
 	var responseBuffer bytes.Buffer
-	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints", "application/json", body)
+	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints/query", "application/JSON", body)
 	if httperror == nil {
 		if resp.StatusCode != 200 {
-			fmt.Printf("Backend error code: %v", resp.StatusCode)
+			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
+			fmt.Println(resp)
 			return response
 		}
 		fmt.Println(resp)
