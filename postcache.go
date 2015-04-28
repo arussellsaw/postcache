@@ -31,6 +31,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(err)
 			return
 		}
+		fmt.Println(hashBuffer.String())
 		if repl == nil {
 			w.Write([]byte(c.updateCache(hash, r.Body)))
 			fmt.Println("cache: MISS")
