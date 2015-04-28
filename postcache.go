@@ -43,8 +43,9 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 func (c container) updateCache(hash string, body io.Reader) string {
 	var response string
 	var responseBuffer bytes.Buffer
-	resp, httperror := http.Post("127.0.0.1:80/api/v1/datapoints", "application/json", body)
-	if httperror != nil {
+	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints", "application/json", body)
+	if httperror == nil {
+		fmt.Println(resp)
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			responseBuffer.Write(scanner.Bytes())
@@ -63,6 +64,7 @@ func (c container) updateCache(hash string, body io.Reader) string {
 		}
 		fmt.Println(repl)
 	} else {
+		fmt.Println(httperror)
 		fmt.Println("backend request failure")
 	}
 	return response
