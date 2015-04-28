@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"io"
 	"net"
 	"net/http"
+	"strings"
 )
 
 type container struct {
@@ -19,10 +19,12 @@ type container struct {
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		var hashBuffer bytes.Buffer
+		var bodyBuffer bytes.Buffer
 		scanner := bufio.NewScanner(r.Body)
 		hashBuffer.WriteString(r.URL.Path)
 		for scanner.Scan() {
 			hashBuffer.Write(scanner.Bytes())
+			bodyBuffer.Write(scanner.Bytes())
 		}
 		sum := md5.Sum(hashBuffer.Bytes())
 		hash := hex.EncodeToString(sum[:16])
@@ -33,7 +35,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Println(hashBuffer.String())
 		if repl == nil {
-			w.Write([]byte(c.updateCache(hash, r.Body)))
+			w.Write([]byte(c.updateCache(hash, bodyBuffer.String())))
 			fmt.Println("cache: MISS")
 		} else {
 			fmt.Println("cache: HIT")
@@ -41,10 +43,10 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c container) updateCache(hash string, body io.Reader) string {
+func (c container) updateCache(hash string, body string) string {
 	var response string
 	var responseBuffer bytes.Buffer
-	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints/query", "application/JSON", body)
+	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints/query", "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
