@@ -39,6 +39,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("cache: MISS")
 		} else {
 			fmt.Println("cache: HIT")
+			w.Write(repl.([]byte))
 		}
 	}
 }
