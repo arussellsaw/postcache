@@ -46,6 +46,10 @@ func (c container) updateCache(hash string, body io.Reader) string {
 	var responseBuffer bytes.Buffer
 	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints", "application/json", body)
 	if httperror == nil {
+		if resp.StatusCode != 200 {
+			fmt.Printf("Backend error code: %v", resp.StatusCode)
+			return response
+		}
 		fmt.Println(resp)
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
