@@ -7,13 +7,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type container struct {
-	redis redis.Conn
+	pool *redis.Pool
 }
 
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +28,9 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		sum := md5.Sum(hashBuffer.Bytes())
 		hash := hex.EncodeToString(sum[:16])
-		repl, err := c.redis.Do("GET", hash)
+		redisConn := c.pool.Get()
+		defer redisConn.Close()
+		repl, err := redisConn.Do("GET", hash)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -47,6 +49,8 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 func (c container) updateCache(hash string, body string) string {
 	var response string
 	var responseBuffer bytes.Buffer
+	redisConn := c.pool.Get()
+	defer redisConn.Close()
 	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints/query", "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
@@ -60,13 +64,13 @@ func (c container) updateCache(hash string, body string) string {
 			responseBuffer.Write(scanner.Bytes())
 		}
 		response = responseBuffer.String()
-		repl, err := c.redis.Do("SET", hash, responseBuffer.String())
+		repl, err := redisConn.Do("SET", hash, responseBuffer.String())
 		if err != nil {
 			fmt.Println(err)
 			return response
 		}
 		fmt.Println(repl)
-		repl, err = c.redis.Do("EXPIRE", hash, 300)
+		repl, err = redisConn.Do("EXPIRE", hash, 300)
 		if err != nil {
 			fmt.Println(err)
 			return response
@@ -80,9 +84,25 @@ func (c container) updateCache(hash string, body string) string {
 }
 
 func main() {
-	conn, _ := net.Dial("tcp", "localhost:6379")
-	redisConn := redis.NewConn(conn, 100000000, 100000000)
-	defer redisConn.Close()
-	http.HandleFunc("/", container{redisConn}.cacheHandler)
+	pool := newPool("localhost:6379")
+	http.HandleFunc("/", container{pool}.cacheHandler)
 	http.ListenAndServe(":8081", nil)
+}
+
+func newPool(server string) *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", server)
+			if err != nil {
+				return nil, err
+			}
+			return c, err
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 }
