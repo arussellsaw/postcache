@@ -43,7 +43,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 				r.URL.Path,
 			}
 			backendURL := strings.Join(urlComponents, "")
-			fmt.Printf("cache: MISS - updating from backend : %s", backendURL)
+			fmt.Printf("cache: MISS - updating from backend : %s \n", backendURL)
 			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), backendURL)))
 		} else {
 			fmt.Printf("cache: HIT %s \n", hash)
