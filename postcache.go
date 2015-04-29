@@ -36,7 +36,6 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println(hashBuffer.String())
 		if repl == nil {
 			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), r)))
 			fmt.Println("cache: MISS")
@@ -49,6 +48,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 
 func (c container) updateCache(hash string, body string, req *http.Request) string {
 	var response string
+	var err error
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
@@ -65,24 +65,21 @@ func (c container) updateCache(hash string, body string, req *http.Request) stri
 			fmt.Println(resp)
 			return response
 		}
-		fmt.Println(resp)
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			responseBuffer.Write(scanner.Bytes())
 		}
 		response = responseBuffer.String()
-		repl, err := redisConn.Do("SET", hash, responseBuffer.String())
+		_, err = redisConn.Do("SET", hash, responseBuffer.String())
 		if err != nil {
 			fmt.Println(err)
 			return response
 		}
-		fmt.Println(repl)
-		repl, err = redisConn.Do("EXPIRE", hash, 300)
+		_, err = redisConn.Do("EXPIRE", hash, 300)
 		if err != nil {
 			fmt.Println(err)
 			return response
 		}
-		fmt.Println(repl)
 	} else {
 		fmt.Println(httperror)
 		fmt.Println("backend request failure")
