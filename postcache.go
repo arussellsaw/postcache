@@ -25,6 +25,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		var hashBuffer bytes.Buffer
 		var bodyBuffer bytes.Buffer
+		var cacheStatus string
 		var urlComponents = []string{
 			"http://",
 			os.Args[1],
@@ -64,12 +65,14 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				if ttlrepl.(int64) < 3300 {
 					log.Debug("cache: STALE - async update from backend")
-					w.Header().Set("X-postcache", "STALE")
+					cacheStatus = "STALE"
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
+				} else {
+					cacheStatus = "HIT"
 				}
 			}
 			log.Debug(fmt.Sprintf("cache: HIT %s ", hash))
-			w.Header().Set("X-postcache", "HIT")
+			w.Header().Set("X-postcache", cacheStatus)
 			w.Write(repl.([]byte))
 		}
 	} else {
