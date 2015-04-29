@@ -1,6 +1,6 @@
 # postcache
 
-A very aggressive stupid caching proxy.
+A very aggressive stupid caching proxy (belligerent caching?).
 
 Designed to be used with KairosDB to alleviate load on the Kairos/Cassandra.  
 
