@@ -58,7 +58,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			if ttlerr != nil {
 				log.Error("key is gone? maybe the TTL expired before we got here.")
 			} else {
-				if ttlrepl.(int) < 3300 {
+				if ttlrepl.(int64) < 3300 {
 					log.Debug(fmt.Sprintf("cache: STALE - async update from backend : %s \n", backendURL))
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
 				}
@@ -117,7 +117,6 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 }
 
 var log = logging.MustGetLogger("example")
-
 var format = logging.MustStringFormatter(
 	"%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}",
 )
@@ -142,12 +141,16 @@ func newPool(server string) *redis.Pool {
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
 			if err != nil {
+				log.Error(err.Error())
 				return nil, err
 			}
 			return c, err
 		},
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			_, err := c.Do("PING")
+			if err != nil {
+				log.Error(err.Error())
+			}
 			return err
 		},
 	}
