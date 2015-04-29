@@ -54,6 +54,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write(repl.([]byte))
 		}
 	} else {
+		fmt.Printf("cache: NOCACHE \n")
 		w.Header().Set("X-postcache", "CANT-CACHE")
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -83,15 +84,17 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 			responseBuffer.Write(scanner.Bytes())
 		}
 		response = responseBuffer.String()
-		_, err = redisConn.Do("SET", hash, responseBuffer.String())
-		if err != nil {
-			fmt.Println(err)
-			return response, err
-		}
-		_, err = redisConn.Do("EXPIRE", hash, 300)
-		if err != nil {
-			fmt.Println(err)
-			return response, err
+		if responseBuffer.String() != "" {
+			_, err = redisConn.Do("SET", hash, responseBuffer.String())
+			if err != nil {
+				fmt.Println(err)
+				return response, err
+			}
+			_, err = redisConn.Do("EXPIRE", hash, 300)
+			if err != nil {
+				fmt.Println(err)
+				return response, err
+			}
 		}
 	} else {
 		fmt.Println(httperror)
