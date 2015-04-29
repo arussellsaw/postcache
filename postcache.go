@@ -85,7 +85,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c container) updateCache(hash string, body string, backendURL string) (string, error) {
-	var response string
+	var response = "RESPONSE NOT SET"
 	var err error
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
