@@ -57,7 +57,8 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-postcache", "CANT-CACHE")
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
-				req.Host = os.Args[1]
+				backendHost := strings.Join([]string{"http://", os.Args[1]}, "")
+				req.Host = backendHost
 				return
 			},
 		}
