@@ -44,17 +44,18 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			backendURL := strings.Join(urlComponents, "")
 			fmt.Printf("cache: MISS - updating from backend : %s \n", backendURL)
-			w.Header().Set("dumb-cache", "MISS")
-			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), backendURL)))
+			w.Header().Set("X-postcache", "MISS")
+			response, _ := c.updateCache(hash, bodyBuffer.String(), backendURL)
+			w.Write([]byte(response))
 		} else {
 			fmt.Printf("cache: HIT %s \n", hash)
-			w.Header().Set("dumb-cache", "HIT")
+			w.Header().Set("X-postcache", "HIT")
 			w.Write(repl.([]byte))
 		}
 	}
 }
 
-func (c container) updateCache(hash string, body string, backendURL string) string {
+func (c container) updateCache(hash string, body string, backendURL string) (string, error) {
 	var response string
 	var err error
 	var responseBuffer bytes.Buffer
@@ -65,7 +66,7 @@ func (c container) updateCache(hash string, body string, backendURL string) stri
 		if resp.StatusCode != 200 {
 			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
 			fmt.Println(resp)
-			return response
+			return response, err
 		}
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
@@ -75,18 +76,18 @@ func (c container) updateCache(hash string, body string, backendURL string) stri
 		_, err = redisConn.Do("SET", hash, responseBuffer.String())
 		if err != nil {
 			fmt.Println(err)
-			return response
+			return response, err
 		}
 		_, err = redisConn.Do("EXPIRE", hash, 300)
 		if err != nil {
 			fmt.Println(err)
-			return response
+			return response, err
 		}
 	} else {
 		fmt.Println(httperror)
 		fmt.Println("backend request failure")
 	}
-	return response
+	return response, err
 }
 
 func main() {
