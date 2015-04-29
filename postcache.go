@@ -113,11 +113,13 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 				log.Error(err.Error())
 				return response, err
 			}
+		} else {
+			log.Error("Empty backend response")
 		}
+
 	} else {
 		log.Error(fmt.Sprintf("Backend request failure: %s", httperror.Error()))
 	}
-	log.Info(fmt.Sprintf("backend response: %s", responseBuffer.String()))
 	return response, err
 }
 
