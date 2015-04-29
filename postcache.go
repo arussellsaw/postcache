@@ -9,6 +9,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"strings"
 	"time"
@@ -55,6 +56,13 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		w.Header().Set("X-postcache", "CANT-CACHE")
+		proxy := &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.Host = os.Args[1]
+				return
+			},
+		}
+		proxy.ServeHTTP(w, r)
 		pass, _ := passRequest(*r)
 		w.Write([]byte(pass))
 	}
