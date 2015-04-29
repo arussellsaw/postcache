@@ -6,12 +6,14 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
+	"github.com/op/go-logging"
 )
 
 type container struct {
@@ -22,6 +24,13 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		var hashBuffer bytes.Buffer
 		var bodyBuffer bytes.Buffer
+		var urlComponents = []string{
+			"http://",
+			os.Args[1],
+			r.URL.Path,
+		}
+		backendURL := strings.Join(urlComponents, "")
+
 		scanner := bufio.NewScanner(r.Body)
 		hashBuffer.WriteString(r.URL.Path)
 		for scanner.Scan() {
@@ -30,31 +39,36 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		sum := md5.Sum(hashBuffer.Bytes())
 		hash := hex.EncodeToString(sum[:16])
+
 		redisConn := c.pool.Get()
 		defer redisConn.Close()
+
 		repl, err := redisConn.Do("GET", hash)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err.Error())
 			return
 		}
 		if repl == nil {
-			var urlComponents = []string{
-				"http://",
-				os.Args[1],
-				r.URL.Path,
-			}
-			backendURL := strings.Join(urlComponents, "")
-			fmt.Printf("cache: MISS - updating from backend : %s \n", backendURL)
+			log.Debug(fmt.Sprintf("cache: MISS - updating from backend : %s \n", backendURL))
 			w.Header().Set("X-postcache", "MISS")
 			response, _ := c.updateCache(hash, bodyBuffer.String(), backendURL)
 			w.Write([]byte(response))
 		} else {
-			fmt.Printf("cache: HIT %s \n", hash)
+			ttlrepl, ttlerr := redisConn.Do("TTL", hash)
+			if ttlerr != nil {
+				log.Error("key is gone? maybe the TTL expired before we got here.")
+			} else {
+				if ttlrepl.(int) < 3300 {
+					log.Debug(fmt.Sprintf("cache: STALE - async update from backend : %s \n", backendURL))
+					go c.updateCache(hash, bodyBuffer.String(), backendURL)
+				}
+			}
+			log.Debug(fmt.Sprintf("cache: HIT %s ", hash))
 			w.Header().Set("X-postcache", "HIT")
 			w.Write(repl.([]byte))
 		}
 	} else {
-		fmt.Printf("cache: NOCACHE \n")
+		log.Debug("cache: NOCACHE")
 		w.Header().Set("X-postcache", "CANT-CACHE")
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -76,8 +90,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
-			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
-			fmt.Println(resp)
+			log.Error(fmt.Sprintf("Backend error code: %v ", resp.StatusCode))
 			return response, err
 		}
 		scanner := bufio.NewScanner(resp.Body)
@@ -88,23 +101,35 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 		if responseBuffer.String() != "" {
 			_, err = redisConn.Do("SET", hash, responseBuffer.String())
 			if err != nil {
-				fmt.Println(err)
+				log.Error(err.Error())
 				return response, err
 			}
-			_, err = redisConn.Do("EXPIRE", hash, 300)
+			_, err = redisConn.Do("EXPIRE", hash, 3600)
 			if err != nil {
-				fmt.Println(err)
+				log.Error(err.Error())
 				return response, err
 			}
 		}
 	} else {
-		fmt.Println(httperror)
-		fmt.Println("backend request failure")
+		log.Error(fmt.Sprintf("Backend request failure: %s", httperror.Error()))
 	}
 	return response, err
 }
 
+var log = logging.MustGetLogger("example")
+
+var format = logging.MustStringFormatter(
+	"%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}",
+)
+
 func main() {
+
+	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, format)
+	logging.SetBackend(backendFormatter)
+
+	log.Info("Postcache listening on 0.0.0.0:8081")
+
 	pool := newPool("localhost:6379")
 	http.HandleFunc("/", container{pool}.cacheHandler)
 	http.ListenAndServe(":8081", nil)
