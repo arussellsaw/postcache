@@ -59,7 +59,8 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 				log.Error("key is gone? maybe the TTL expired before we got here.")
 			} else {
 				if ttlrepl.(int64) < 3300 {
-					log.Debug(fmt.Sprintf("cache: STALE - async update from backend : %s \n", backendURL))
+					log.Debug("cache: STALE - async update from backend")
+					w.Header().Set("X-postcache", "STALE")
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
 				}
 			}
