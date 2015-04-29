@@ -37,27 +37,27 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), r)))
-			fmt.Println("cache: MISS")
+			var urlComponents = []string{
+				"http://",
+				os.Args[1],
+				r.URL.Path,
+			}
+			backendURL := strings.Join(urlComponents, "")
+			fmt.Printf("cache: MISS - updating from backend : %s", backendURL)
+			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), backendURL)))
 		} else {
-			fmt.Println("cache: HIT")
+			fmt.Printf("cache: HIT %s \n", hash)
 			w.Write(repl.([]byte))
 		}
 	}
 }
 
-func (c container) updateCache(hash string, body string, req *http.Request) string {
+func (c container) updateCache(hash string, body string, backendURL string) string {
 	var response string
 	var err error
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	var urlComponents = []string{
-		"http://",
-		os.Args[1],
-		req.URL.Path,
-	}
-	backendURL := strings.Join(urlComponents, "")
 	resp, httperror := http.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
