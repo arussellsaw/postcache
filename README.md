@@ -9,6 +9,8 @@ Caches response body from POST requests in redis for 5 minutes, returns body fro
 Usage:  
 ```./postcache kairosdb.example.com:8080 ```
 
+will start postcache running on localhost:8081 (currently not configurable)
+
 Cache hit/miss can be seen via headers
 
     X-Postcache: [HIT, MISS, CANT-CACHE]
