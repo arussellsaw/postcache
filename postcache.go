@@ -72,7 +72,8 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	resp, httperror := http.Post(backendURL, "application/JSON", strings.NewReader(body))
+	httpClient := http.Client{Timeout: time.Duration(10 * time.Minute)}
+	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
