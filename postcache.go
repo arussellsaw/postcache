@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"os"
@@ -90,18 +91,18 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	httpClient := http.Client{Timeout: time.Duration(10 * time.Minute)}
+	httpClient := http.Client{Timeout: time.Duration(60 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			log.Error(fmt.Sprintf("Backend error code: %v ", resp.StatusCode))
 			return response, err
 		}
-		scanner := bufio.NewScanner(resp.Body)
-		for scanner.Scan() {
-			responseBuffer.Write(scanner.Bytes())
+		requestBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Error(err.Error())
 		}
-		response = responseBuffer.String()
+		response = string(requestBody)
 		if responseBuffer.String() != "" {
 			_, err = redisConn.Do("SET", hash, responseBuffer.String())
 			if err != nil {
