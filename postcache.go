@@ -50,7 +50,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			log.Debug(fmt.Sprintf("cache: MISS - updating from backend : %s \n", backendURL))
+			log.Debug("cache: MISS - updating from backend")
 			w.Header().Set("X-postcache", "MISS")
 			response, cacheError := c.updateCache(hash, bodyBuffer.String(), backendURL)
 			if cacheError != nil {
