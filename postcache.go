@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -52,6 +53,10 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-postcache", "HIT")
 			w.Write(repl.([]byte))
 		}
+	} else {
+		w.Header().Set("X-postcache", "CANT-CACHE")
+		pass, _ := passRequest(*r)
+		w.Write([]byte(pass))
 	}
 }
 
@@ -88,6 +93,15 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 		fmt.Println("backend request failure")
 	}
 	return response, err
+}
+
+func passRequest(r http.Request) (string, error) {
+	var err error
+	r.Host = os.Args[1]
+	client := http.Client{}
+	resp, _ := client.Do(&r)
+	body, _ := ioutil.ReadAll(resp.Body)
+	return string(body), err
 }
 
 func main() {
