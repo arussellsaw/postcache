@@ -130,7 +130,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 
 var log = logging.MustGetLogger("example")
 var format = logging.MustStringFormatter(
-	"%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}",
+	"%{color}%{time:15:04:05.000} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}",
 )
 
 func main() {
