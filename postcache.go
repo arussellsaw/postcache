@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -37,7 +38,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Println(hashBuffer.String())
 		if repl == nil {
-			w.Write([]byte(c.updateCache(hash, bodyBuffer.String())))
+			w.Write([]byte(c.updateCache(hash, bodyBuffer.String(), r)))
 			fmt.Println("cache: MISS")
 		} else {
 			fmt.Println("cache: HIT")
@@ -46,12 +47,18 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c container) updateCache(hash string, body string) string {
+func (c container) updateCache(hash string, body string, req *http.Request) string {
 	var response string
 	var responseBuffer bytes.Buffer
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	resp, httperror := http.Post("https://127.0.0.1:80/api/v1/datapoints/query", "application/JSON", strings.NewReader(body))
+	var urlComponents = []string{
+		"http://",
+		os.Args[1],
+		req.URL.Path,
+	}
+	backendURL := strings.Join(urlComponents, "")
+	resp, httperror := http.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			fmt.Printf("Backend error code: %v \n", resp.StatusCode)
