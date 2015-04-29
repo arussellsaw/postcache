@@ -103,7 +103,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 			log.Error(err.Error())
 		}
 		response = string(requestBody)
-		if responseBuffer.String() != "" {
+		if string(requestBody) != "" {
 			_, err = redisConn.Do("SET", hash, responseBuffer.String())
 			if err != nil {
 				log.Error(err.Error())
