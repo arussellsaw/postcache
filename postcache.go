@@ -51,7 +51,10 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		if repl == nil {
 			log.Debug(fmt.Sprintf("cache: MISS - updating from backend : %s \n", backendURL))
 			w.Header().Set("X-postcache", "MISS")
-			response, _ := c.updateCache(hash, bodyBuffer.String(), backendURL)
+			response, cacheError := c.updateCache(hash, bodyBuffer.String(), backendURL)
+			if cacheError != nil {
+				log.Error(cacheError.Error())
+			}
 			w.Write([]byte(response))
 		} else {
 			ttlrepl, ttlerr := redisConn.Do("TTL", hash)
