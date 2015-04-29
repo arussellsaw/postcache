@@ -81,7 +81,7 @@ func (c container) updateCache(hash string, body string) string {
 
 func main() {
 	conn, _ := net.Dial("tcp", "localhost:6379")
-	redisConn := redis.NewConn(conn, 10000000, 10000000)
+	redisConn := redis.NewConn(conn, 100000000, 100000000)
 	defer redisConn.Close()
 	http.HandleFunc("/", container{redisConn}.cacheHandler)
 	http.ListenAndServe(":8081", nil)
