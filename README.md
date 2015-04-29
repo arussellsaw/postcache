@@ -1,4 +1,15 @@
 # postcache
-An HTTP POST response cache for caching Kairosdb when used with Grafana
 
-caches all query responses from kairosdb for 5 minutes. 
+A very aggressive stupid caching proxy.
+
+Designed to be used with KairosDB to alleviate load on the Kairos/Cassandra.  
+
+Caches response body from POST requests in redis for 5 minutes, returns body from cache on identical requests.
+
+Usage:  
+```./postcache kairosdb.example.com:8080 ```
+
+Cache hit/miss can be seen via headers
+
+    X-Postcache: [HIT, MISS, CANT-CACHE]
+    X-Postcache-freshness: [FRESH, STALE] (coming soon)
