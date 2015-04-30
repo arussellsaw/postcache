@@ -53,7 +53,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.YellowString("MISS")))
+			log.Debug(fmt.Sprintf("%s %s", hash, color.YellowString("MISS")))
 			w.Header().Set("X-postcache", "MISS")
 			response, cacheError := c.updateCache(hash, string(body), backendURL, false)
 			if cacheError != nil {
@@ -72,12 +72,11 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 					cacheStatus = color.CyanString("HIT")
 				}
 			}
-			log.Debug(fmt.Sprintf("cache: %s %s ", hash, cacheStatus))
+			log.Debug(fmt.Sprintf("%s %s ", hash, cacheStatus))
 			w.Header().Set("X-postcache", cacheStatus)
 			w.Write(repl.([]byte))
 		}
 	} else {
-		log.Debug("cache: NOCACHE")
 		w.Header().Set("X-postcache", "CANT-CACHE")
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
@@ -95,6 +94,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 
 	if c.lockUpdate(hash) == false {
 		if async == true {
+			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString("LOCKED")))
 			return response, err
 		}
 	}
@@ -102,7 +102,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
 
-	log.Debug("cache: %s %s", hash, color.BlueString("UPDATE"))
+	log.Debug("%s %s", hash, color.BlueString("UPDATE"))
 
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
@@ -125,7 +125,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 				log.Error(fmt.Sprintf("key set failed: %s : %s", hash, err.Error()))
 				return response, err
 			}
-			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.GreenString("SET")))
+			log.Debug(fmt.Sprintf("%s %s", hash, color.GreenString("SET")))
 			_, err = redisConn.Do("EXPIRE", hash, config.expire)
 			if err != nil {
 				log.Error(fmt.Sprintf("key expire set failed: %s : %s", hash, err.Error()))
@@ -155,7 +155,6 @@ func (c container) lockUpdate(hash string) bool {
 	if resp == nil {
 		redisConn.Do("SET", fmt.Sprintf("lock-%s", hash), "locked")
 	} else {
-		log.Debug(fmt.Sprintf("cache: %s %s", hash, color.RedString("LOCKED")))
 		return false
 	}
 	return true
