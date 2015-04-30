@@ -66,6 +66,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 				if ttlrepl.(int64) < 6900 {
 					cacheStatus = "STALE"
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
+					log.Info("cache: %s UPDATE", hash)
 				} else {
 					cacheStatus = "HIT"
 				}
