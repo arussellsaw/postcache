@@ -2,7 +2,7 @@
 
 A very aggressive stupid caching proxy (belligerent caching?).
 
-Designed to be used with KairosDB to alleviate load on the Kairos/Cassandra.  
+Designed to be used with KairosDB to alleviate load on Kairos/Cassandra.  
 
 Caches response body from POST requests in redis for 5 minutes, returns body from cache on identical requests.
 
