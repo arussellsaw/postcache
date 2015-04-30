@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -18,6 +19,14 @@ import (
 
 type container struct {
 	pool *redis.Pool
+}
+
+type configParams struct {
+	backend   string
+	listen    string
+	redis     string
+	expire    int
+	freshness int
 }
 
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
@@ -56,11 +65,11 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			if ttlerr != nil {
 				log.Error("key is gone? maybe the TTL expired before we got here.")
 			} else {
-				if ttlrepl.(int64) < 6900 {
+				if ttlrepl.(int64) < int64((config.expire - config.freshness)) {
 					cacheStatus = color.YellowString("STALE")
 					go c.updateCache(hash, string(body), backendURL)
 				} else {
-					cacheStatus = color.BlueString("HIT")
+					cacheStatus = color.CyanString("HIT")
 				}
 			}
 			log.Debug(fmt.Sprintf("cache: %s %s ", hash, cacheStatus))
@@ -85,7 +94,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var err error
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	log.Debug("cache: %s UPDATE", hash)
+	log.Debug("cache: %s %s", hash, color.BlueString("UPDATE"))
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
@@ -105,7 +114,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 				return response, err
 			}
 			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.GreenString("SET")))
-			_, err = redisConn.Do("EXPIRE", hash, 7200)
+			_, err = redisConn.Do("EXPIRE", hash, config.expire)
 			if err != nil {
 				log.Error(err.Error())
 				return response, err
@@ -121,22 +130,28 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	return response, err
 }
 
+var config configParams
 var log = logging.MustGetLogger("example")
 var format = logging.MustStringFormatter(
 	"%{color}%{time:15:04:05.000} >> %{level:.4s} %{color:reset} %{message}",
 )
 
 func main() {
-
+	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
+	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
+	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
+	flag.IntVar(&config.expire, "e", 7200, "TTL of cache values (seconds)")
+	flag.IntVar(&config.freshness, "f", 300, "age at which a cache becomes STALE (seconds)")
+	flag.Parse()
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
-	log.Info("Postcache listening on 0.0.0.0:8081")
+	log.Info("Postcache listening on 0.0.0.0:%s", config.listen)
 
-	pool := newPool("localhost:6379")
+	pool := newPool(config.redis)
 	http.HandleFunc("/", container{pool}.cacheHandler)
-	http.ListenAndServe(":8081", nil)
+	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
 
 func newPool(server string) *redis.Pool {
