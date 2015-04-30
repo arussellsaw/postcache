@@ -1,6 +1,6 @@
 # postcache
 
-A very aggressive stupid caching proxy (belligerent caching?).
+A very aggressive stupid caching reverse proxy (belligerent caching?).
 
 Designed to be used with KairosDB to alleviate load on Kairos/Cassandra.  
 
@@ -11,14 +11,16 @@ requires redis-server on localhost:6379
 ###Usage:  
 ```./postcache -b 'kairosdb.example.com:8080' ```
 ####Flags:
-* flag - default
-* `-b backend` `127.0.0.1:8080`
-* `-l listen` `8081`
-* `-r redis` `127.0.0.1:6379`
-* `-e expire` `7200`
-* `-f freshness` `300`
-
-will start postcache running on localhost:8081 (currently not configurable)
+* `-b` `127.0.0.1:8080`
+    * the host to forward requests to
+* `-l` `8081`
+    * port to listen on
+* `-r` `127.0.0.1:6379`
+    * address of redis-server
+* `-e` `7200`
+    * TTL of keys in redis (seconds)
+* `-f` `300`
+    * Age of cache before it is considered STALE and updated (seconds)
 
 Cache hit/miss can be seen via headers
 
