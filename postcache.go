@@ -34,7 +34,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		var cacheStatus string
 		var urlComponents = []string{
 			"http://",
-			os.Args[1],
+			config.backend,
 			r.URL.Path,
 		}
 		backendURL := strings.Join(urlComponents, "")
@@ -82,7 +82,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				req.URL.Scheme = "http"
-				req.URL.Host = os.Args[1]
+				req.URL.Host = config.backend
 			},
 		}
 		proxy.ServeHTTP(w, r)
