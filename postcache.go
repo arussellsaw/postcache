@@ -111,8 +111,8 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 				log.Error(err.Error())
 				return response, err
 			}
-			log.Debug(fmt.Sprintf("cache: SET %s", hash))
-			_, err = redisConn.Do("EXPIRE", hash, 3600)
+			log.Info(fmt.Sprintf("cache: SET %s", hash))
+			_, err = redisConn.Do("EXPIRE", hash, 7200)
 			if err != nil {
 				log.Error(err.Error())
 				return response, err
