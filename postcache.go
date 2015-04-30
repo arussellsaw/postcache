@@ -51,7 +51,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			log.Debug(fmt.Sprintf("cache: %s MISS", hash))
+			log.Warning(fmt.Sprintf("cache: %s MISS", hash))
 			w.Header().Set("X-postcache", "MISS")
 			response, cacheError := c.updateCache(hash, bodyBuffer.String(), backendURL)
 			if cacheError != nil {
