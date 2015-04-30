@@ -51,7 +51,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			log.Debug("cache: MISS - updating from backend")
+			log.Debug(fmt.Sprintf("cache: %s MISS", hash))
 			w.Header().Set("X-postcache", "MISS")
 			response, cacheError := c.updateCache(hash, bodyBuffer.String(), backendURL)
 			if cacheError != nil {
@@ -63,15 +63,14 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			if ttlerr != nil {
 				log.Error("key is gone? maybe the TTL expired before we got here.")
 			} else {
-				if ttlrepl.(int64) < 3300 {
-					log.Debug("cache: STALE - async update from backend")
+				if ttlrepl.(int64) < 6900 {
 					cacheStatus = "STALE"
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
 				} else {
 					cacheStatus = "HIT"
 				}
 			}
-			log.Debug(fmt.Sprintf("cache: HIT %s ", hash))
+			log.Debug(fmt.Sprintf("cache: %s %s ", hash, cacheStatus))
 			w.Header().Set("X-postcache", cacheStatus)
 			w.Write(repl.([]byte))
 		}
@@ -111,7 +110,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 				log.Error(err.Error())
 				return response, err
 			}
-			log.Info(fmt.Sprintf("cache: SET %s", hash))
+			log.Notice(fmt.Sprintf("cache: SET %s", hash))
 			_, err = redisConn.Do("EXPIRE", hash, 7200)
 			if err != nil {
 				log.Error(err.Error())
