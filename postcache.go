@@ -154,6 +154,7 @@ func (c container) lockUpdate(hash string) bool {
 	}
 	if resp == nil {
 		redisConn.Do("SET", fmt.Sprintf("lock-%s", hash), "locked")
+		redisConn.Do("EXPIRE", fmt.Sprintf("lock-%s", hash), 600)
 	} else {
 		return false
 	}
