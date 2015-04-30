@@ -147,7 +147,10 @@ func main() {
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
-	log.Info("Postcache listening on 0.0.0.0:%s", config.listen)
+	log.Info("Postcache!")
+	log.Info("listening on 0.0.0.0:%s", config.listen)
+	log.Info("backend server: %s", config.backend)
+	log.Info("redis cache server: %s", config.redis)
 
 	pool := newPool(config.redis)
 	http.HandleFunc("/", container{pool}.cacheHandler)
