@@ -8,8 +8,15 @@ Caches response body from POST requests in redis for 5 minutes, returns body fro
 
 requires redis-server on localhost:6379  
 
-Usage:  
-```./postcache kairosdb.example.com:8080 ```
+###Usage:  
+```./postcache -b 'kairosdb.example.com:8080' ```
+####Flags:
+* flag - default
+* `-b backend` `127.0.0.1:8080`
+* `-l listen` `8081`
+* `-r redis` `127.0.0.1:6379`
+* `-e expire` `7200`
+* `-f freshness` `300`
 
 will start postcache running on localhost:8081 (currently not configurable)
 
