@@ -104,19 +104,19 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 		}
 		requestBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error(fmt.Sprintf("body read failed: %s : %s", hash, err.Error()))
 		}
 		response = string(requestBody)
 		if string(requestBody) != "" {
 			_, err = redisConn.Do("SET", hash, string(requestBody))
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(fmt.Sprintf("key set failed on: %s : %s", hash, err.Error()))
 				return response, err
 			}
 			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.GreenString("SET")))
 			_, err = redisConn.Do("EXPIRE", hash, config.expire)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(fmt.Sprintf("key expire set failed on: %s : %s", hash, err.Error()))
 				return response, err
 			}
 		} else {
@@ -164,7 +164,7 @@ func newPool(server string) *redis.Pool {
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(fmt.Sprintf("redis connection failed: %s", err.Error()))
 				return nil, err
 			}
 			return c, err
@@ -172,7 +172,7 @@ func newPool(server string) *redis.Pool {
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			_, err := c.Do("PING")
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(fmt.Sprintf("redis connection failed: %s", err.Error()))
 			}
 			return err
 		},
