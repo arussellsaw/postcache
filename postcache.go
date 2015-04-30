@@ -66,7 +66,6 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 				if ttlrepl.(int64) < 6900 {
 					cacheStatus = "STALE"
 					go c.updateCache(hash, bodyBuffer.String(), backendURL)
-					log.Info("cache: %s UPDATE", hash)
 				} else {
 					cacheStatus = "HIT"
 				}
@@ -93,6 +92,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var err error
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
+	log.Info("cache: %s UPDATE", hash)
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
