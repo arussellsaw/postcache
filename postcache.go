@@ -95,6 +95,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 
 	if c.lockUpdate(hash) == false {
 		if async == true {
+			log.Debug(fmt.Sprintf("cache: %s BLOCKED", hash))
 			return response, err
 		}
 	}
