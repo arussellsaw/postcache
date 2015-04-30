@@ -6,8 +6,6 @@ Designed to be used with KairosDB to alleviate load on Kairos/Cassandra.
 
 Caches response body from POST requests in redis for 5 minutes, returns body from cache on identical requests.
 
-requires redis-server on localhost:6379  
-
 ###Usage:  
 ```./postcache -b 'kairosdb.example.com:8080' ```
 ####Flags:
