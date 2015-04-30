@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/garyburd/redigo/redis"
 	"github.com/op/go-logging"
 )
@@ -23,8 +22,6 @@ type container struct {
 
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		var hashBuffer bytes.Buffer
-		var bodyBuffer bytes.Buffer
 		var cacheStatus string
 		var urlComponents = []string{
 			"http://",
@@ -33,13 +30,9 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		backendURL := strings.Join(urlComponents, "")
 
-		scanner := bufio.NewScanner(r.Body)
-		hashBuffer.WriteString(r.URL.Path)
-		for scanner.Scan() {
-			hashBuffer.Write(scanner.Bytes())
-			bodyBuffer.Write(scanner.Bytes())
-		}
-		sum := md5.Sum(hashBuffer.Bytes())
+		body, _ := ioutil.ReadAll(r.Body)
+		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
+		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
 
 		redisConn := c.pool.Get()
@@ -51,9 +44,9 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if repl == nil {
-			log.Warning(fmt.Sprintf("cache: %s MISS", hash))
+			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.YellowString("MISS")))
 			w.Header().Set("X-postcache", "MISS")
-			response, cacheError := c.updateCache(hash, bodyBuffer.String(), backendURL)
+			response, cacheError := c.updateCache(hash, string(body), backendURL)
 			if cacheError != nil {
 				log.Error(cacheError.Error())
 			}
@@ -64,10 +57,10 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 				log.Error("key is gone? maybe the TTL expired before we got here.")
 			} else {
 				if ttlrepl.(int64) < 6900 {
-					cacheStatus = "STALE"
-					go c.updateCache(hash, bodyBuffer.String(), backendURL)
+					cacheStatus = color.YellowString("STALE")
+					go c.updateCache(hash, string(body), backendURL)
 				} else {
-					cacheStatus = "HIT"
+					cacheStatus = color.BlueString("HIT")
 				}
 			}
 			log.Debug(fmt.Sprintf("cache: %s %s ", hash, cacheStatus))
@@ -92,7 +85,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var err error
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	log.Info("cache: %s UPDATE", hash)
+	log.Debug("cache: %s UPDATE", hash)
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
@@ -111,7 +104,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 				log.Error(err.Error())
 				return response, err
 			}
-			log.Notice(fmt.Sprintf("cache: %s SET", hash))
+			log.Debug(fmt.Sprintf("cache: %s %s", hash, color.GreenString("SET")))
 			_, err = redisConn.Do("EXPIRE", hash, 7200)
 			if err != nil {
 				log.Error(err.Error())
