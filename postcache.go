@@ -92,7 +92,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 	var err error
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
-	httpClient := http.Client{Timeout: time.Duration(60 * time.Second)}
+	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
@@ -129,7 +129,7 @@ func (c container) updateCache(hash string, body string, backendURL string) (str
 
 var log = logging.MustGetLogger("example")
 var format = logging.MustStringFormatter(
-	"%{color}%{time:15:04:05.000} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}",
+	"%{color}%{time:15:04:05.000} ▶ %{level:.4s} %{color:reset} %{message}",
 )
 
 func main() {
