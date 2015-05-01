@@ -32,6 +32,7 @@ type configParams struct {
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		var cacheStatus string
+		var header string
 		var urlComponents = []string{
 			"http://",
 			config.backend,
@@ -67,13 +68,15 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				if ttlrepl.(int64) < int64((config.expire - config.freshness)) {
 					cacheStatus = color.YellowString("STALE")
+					header = "STALE"
 					go c.updateCache(hash, string(body), backendURL, true)
 				} else {
 					cacheStatus = color.CyanString("HIT")
+					header = "HIT"
 				}
 			}
 			log.Debug(fmt.Sprintf("%s %s ", hash, cacheStatus))
-			w.Header().Set("X-postcache", cacheStatus)
+			w.Header().Set("X-postcache", header)
 			w.Write(repl.([]byte))
 		}
 	} else {
@@ -98,6 +101,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 			return response, err
 		}
 	}
+	defer c.unlockUpdate(hash)
 
 	redisConn := c.pool.Get()
 	defer redisConn.Close()
@@ -139,8 +143,6 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 	} else {
 		log.Error(fmt.Sprintf("Backend request failure: %s", httperror.Error()))
 	}
-
-	c.unlockUpdate(hash)
 
 	return response, err
 }
