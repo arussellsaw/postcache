@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
@@ -59,13 +60,13 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(cacheResponse))
 		case "STALE":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.WhiteString(cacheStatus)))
-			go c.asyncUpdate(hash, r)
+			go c.asyncUpdate(hash, r, string(body))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "MISS":
-			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString("MISS")))
+			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString(cacheStatus)))
 			w.Header().Set("X-postcache", cacheStatus)
-			response, err = c.getResponse(hash, r)
+			response, err = c.getResponse(hash, r, string(body))
 			c.cache.set(hash, response)
 			w.Write([]byte(response))
 		}
@@ -81,14 +82,14 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c container) asyncUpdate(hash string, r *http.Request) {
+func (c container) asyncUpdate(hash string, r *http.Request, requestBody string) {
 	lock, err := c.cache.lock(hash)
 	if err != nil {
 		return
 	}
 	if lock == true {
 		defer c.cache.unlock(hash)
-		resp, err := c.getResponse(hash, r)
+		resp, err := c.getResponse(hash, r, requestBody)
 		if err != nil {
 			return
 		}
@@ -96,8 +97,7 @@ func (c container) asyncUpdate(hash string, r *http.Request) {
 	}
 }
 
-func (c container) getResponse(hash string, r *http.Request) (string, error) {
-	var body []byte
+func (c container) getResponse(hash string, r *http.Request, body string) (string, error) {
 	var response string
 	var err error
 	var urlComponents = []string{
@@ -105,8 +105,6 @@ func (c container) getResponse(hash string, r *http.Request) (string, error) {
 		config.backend,
 		r.URL.Path,
 	}
-
-	body, err = ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Error(err.Error())
 		return "", err
@@ -114,7 +112,7 @@ func (c container) getResponse(hash string, r *http.Request) (string, error) {
 
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
-	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(string(body)))
+	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
 
 	if httperror == nil {
 		if resp.StatusCode != 200 {
