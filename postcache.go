@@ -82,6 +82,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c container) asyncUpdate(hash string, r *http.Request, requestBody string) {
+	log.Debug(fmt.Sprintf("%s %s", hash, color.BlueString("UPDATE")))
 	lock, err := c.cache.lock(hash)
 	if err != nil {
 		return
