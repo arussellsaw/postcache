@@ -88,6 +88,7 @@ func (c redisCache) lock(hash string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	fmt.Printf("%T", resp)
 	if resp == 0 {
 		log.Debug("LOCKED")
 		return false, nil
