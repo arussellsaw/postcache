@@ -99,13 +99,18 @@ func (c container) asyncUpdate(hash string, r *http.Request) {
 func (c container) getResponse(hash string, r *http.Request) (string, error) {
 	var body []byte
 	var response string
+	var err error
 	var urlComponents = []string{
 		"http://",
 		config.backend,
 		r.URL.Path,
 	}
 
-	body, _ = ioutil.ReadAll(r.Body)
+	body, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Error(err.Error())
+		return "", err
+	}
 
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
