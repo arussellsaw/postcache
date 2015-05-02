@@ -47,7 +47,6 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
-		fmt.Println("1")
 		cacheResponse, cacheStatus, err = c.cache.get(hash)
 		if err != nil {
 			log.Error(err.Error())
@@ -114,6 +113,7 @@ func (c container) getResponse(hash string, r *http.Request) (string, error) {
 
 	if httperror == nil {
 		if resp.StatusCode != 200 {
+			log.Error(backendURL)
 			err := fmt.Errorf("Backend error code: %v ", resp.StatusCode)
 			log.Error(err.Error())
 			return "", err
