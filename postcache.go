@@ -94,6 +94,8 @@ func (c container) asyncUpdate(hash string, r *http.Request, requestBody string)
 			return
 		}
 		c.cache.set(hash, resp)
+	} else {
+		log.Debug("%s %s", hash, color.RedString("LOCKED"))
 	}
 }
 
