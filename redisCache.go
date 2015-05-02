@@ -31,7 +31,7 @@ func (c redisCache) get(hash string) (string, string, error) {
 	resp, err := redis.Do("GET", hash)
 	if err == nil {
 		if resp != nil {
-			response = resp.(string)
+			response = string(resp.([]byte))
 		} else {
 			return "", "MISS", nil
 		}
