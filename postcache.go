@@ -13,12 +13,11 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/garyburd/redigo/redis"
 	"github.com/op/go-logging"
 )
 
 type container struct {
-	pool *redis.Pool
+	cache cacher
 }
 
 type configParams struct {
@@ -29,55 +28,47 @@ type configParams struct {
 	freshness int
 }
 
+type cacher interface {
+	initialize(configParams) error
+	get(string) (string, string, error)
+	set(string, string) error
+	lock(string) (bool, error)
+	unlock(string) error
+}
+
 func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
+	var cacheStatus string
+	var cacheResponse string
+	var response string
+	var err error
 	if r.Method == "POST" {
-		var cacheStatus string
-		var header string
-		var urlComponents = []string{
-			"http://",
-			config.backend,
-			r.URL.Path,
-		}
-		backendURL := strings.Join(urlComponents, "")
 
 		body, _ := ioutil.ReadAll(r.Body)
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
 
-		redisConn := c.pool.Get()
-		defer redisConn.Close()
-
-		repl, err := redisConn.Do("GET", hash)
+		cacheResponse, cacheStatus, err = c.cache.get(hash)
 		if err != nil {
 			log.Error(err.Error())
 			return
 		}
-		if repl == nil {
-			log.Debug(fmt.Sprintf("%s %s", hash, color.YellowString("MISS")))
-			w.Header().Set("X-postcache", "MISS")
-			response, cacheError := c.updateCache(hash, string(body), backendURL, false)
-			if cacheError != nil {
-				log.Error(cacheError.Error())
-			}
+		switch cacheStatus {
+		case "HIT":
+			log.Debug(fmt.Sprintf("%s %s", hash, color.CyanString(cacheStatus)))
+			w.Header().Set("X-Postcache", cacheStatus)
+			w.Write([]byte(cacheResponse))
+		case "STALE":
+			log.Debug(fmt.Sprintf("%s %s", hash, color.WhiteString(cacheStatus)))
+			go c.asyncUpdate(hash, r)
+			w.Header().Set("X-Postcache", cacheStatus)
+			w.Write([]byte(cacheResponse))
+		case "MISS":
+			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString("MISS")))
+			w.Header().Set("X-postcache", cacheStatus)
+			response, err = c.getResponse(hash, r)
+			c.cache.set(hash, response)
 			w.Write([]byte(response))
-		} else {
-			ttlrepl, ttlerr := redisConn.Do("TTL", hash)
-			if ttlerr != nil {
-				log.Error("key is gone? maybe the TTL expired before we got here.")
-			} else {
-				if ttlrepl.(int64) < int64((config.expire - config.freshness)) {
-					cacheStatus = color.YellowString("STALE")
-					header = "STALE"
-					go c.updateCache(hash, string(body), backendURL, true)
-				} else {
-					cacheStatus = color.CyanString("HIT")
-					header = "HIT"
-				}
-			}
-			log.Debug(fmt.Sprintf("%s %s ", hash, cacheStatus))
-			w.Header().Set("X-postcache", header)
-			w.Write(repl.([]byte))
 		}
 	} else {
 		w.Header().Set("X-postcache", "CANT-CACHE")
@@ -91,50 +82,57 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c container) updateCache(hash string, body string, backendURL string, async bool) (string, error) {
-	var response string
-	var err error
-
-	if c.lockUpdate(hash) == false {
-		if async == true {
-			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString("LOCKED")))
-			return response, err
-		}
+func (c container) asyncUpdate(hash string, r *http.Request) {
+	lock, err := c.cache.lock(hash)
+	if err != nil {
+		return
 	}
-	defer c.unlockUpdate(hash)
+	if lock == true {
+		defer c.cache.unlock(hash)
+		resp, err := c.getResponse(hash, r)
+		if err != nil {
+			return
+		}
+		c.cache.set(hash, resp)
+	}
+}
 
-	redisConn := c.pool.Get()
-	defer redisConn.Close()
+func (c container) getResponse(hash string, r *http.Request) (string, error) {
+	var body []byte
+	var response string
+	var urlComponents = []string{
+		"http://",
+		config.backend,
+		r.URL.Path,
+	}
 
-	log.Debug("%s %s", hash, color.BlueString("UPDATE"))
+	body, _ = ioutil.ReadAll(r.Body)
 
+	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
-	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
+	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(string(body)))
 
 	if httperror == nil {
 		if resp.StatusCode != 200 {
-			log.Error(fmt.Sprintf("Backend error code: %v ", resp.StatusCode))
-			return response, err
+			err := fmt.Errorf("Backend error code: %v ", resp.StatusCode)
+			log.Error(err.Error())
+			return "", err
 		}
 
-		requestBody, err := ioutil.ReadAll(resp.Body)
+		responseBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			log.Error(fmt.Sprintf("body read failed: %s : %s", hash, err.Error()))
+			return "", err
 		}
 
-		response = string(requestBody)
+		response = string(responseBody)
 		if response != "" {
-			_, err = redisConn.Do("SET", hash, string(requestBody))
+			err = c.cache.set(hash, response)
 			if err != nil {
 				log.Error(fmt.Sprintf("key set failed: %s : %s", hash, err.Error()))
 				return response, err
 			}
 			log.Debug(fmt.Sprintf("%s %s", hash, color.GreenString("SET")))
-			_, err = redisConn.Do("EXPIRE", hash, config.expire)
-			if err != nil {
-				log.Error(fmt.Sprintf("key expire set failed: %s : %s", hash, err.Error()))
-				return response, err
-			}
 		} else {
 			log.Error("Empty backend response")
 			fmt.Println(resp)
@@ -143,34 +141,7 @@ func (c container) updateCache(hash string, body string, backendURL string, asyn
 	} else {
 		log.Error(fmt.Sprintf("Backend request failure: %s", httperror.Error()))
 	}
-
-	return response, err
-}
-
-func (c container) lockUpdate(hash string) bool {
-	redisConn := c.pool.Get()
-	resp, err := redisConn.Do("GET", fmt.Sprintf("lock-%s", hash))
-	if err != nil {
-		log.Error("failed to establish update lock")
-		return false
-	}
-	if resp == nil {
-		redisConn.Do("SET", fmt.Sprintf("lock-%s", hash), "locked")
-		redisConn.Do("EXPIRE", fmt.Sprintf("lock-%s", hash), 600)
-	} else {
-		return false
-	}
-	return true
-}
-
-func (c container) unlockUpdate(hash string) bool {
-	redisConn := c.pool.Get()
-	_, err := redisConn.Do("DEL", fmt.Sprintf("lock-%s", hash))
-	if err != nil {
-		log.Error(fmt.Sprintf("failed to unlock %s", hash))
-		return false
-	}
-	return true
+	return response, nil
 }
 
 var config configParams
@@ -180,6 +151,7 @@ var format = logging.MustStringFormatter(
 )
 
 func main() {
+	var cache redisCache
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
 	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
 	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
@@ -190,34 +162,11 @@ func main() {
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
+	cache.initialize(config)
+
 	log.Info("Postcache!")
 	log.Info("listening on 0.0.0.0:%s", config.listen)
-	log.Info("backend server: %s", config.backend)
-	log.Info("redis cache server: %s", config.redis)
 
-	pool := newPool(config.redis)
-	http.HandleFunc("/", container{pool}.cacheHandler)
+	http.HandleFunc("/", container{cache}.cacheHandler)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
-}
-
-func newPool(server string) *redis.Pool {
-	return &redis.Pool{
-		MaxIdle:     3,
-		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", server)
-			if err != nil {
-				log.Error(fmt.Sprintf("redis connection failed: %s", err.Error()))
-				return nil, err
-			}
-			return c, err
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("PING")
-			if err != nil {
-				log.Error(fmt.Sprintf("redis connection failed: %s", err.Error()))
-			}
-			return err
-		},
-	}
 }
