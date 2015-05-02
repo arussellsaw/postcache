@@ -29,7 +29,7 @@ type configParams struct {
 }
 
 type cacher interface {
-	initialize(configParams) error
+	initialize() error
 	get(string) (string, string, error)
 	set(string, string) error
 	lock(string) (bool, error)
@@ -47,7 +47,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
-
+		fmt.Println("1")
 		cacheResponse, cacheStatus, err = c.cache.get(hash)
 		if err != nil {
 			log.Error(err.Error())
@@ -151,7 +151,6 @@ var format = logging.MustStringFormatter(
 )
 
 func main() {
-	var cache redisCache
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
 	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
 	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
@@ -162,9 +161,11 @@ func main() {
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
-	cache.initialize(config)
-
 	log.Info("Postcache!")
+
+	var cache = new(redisCache)
+	cache.initialize()
+
 	log.Info("listening on 0.0.0.0:%s", config.listen)
 
 	http.HandleFunc("/", container{cache}.cacheHandler)

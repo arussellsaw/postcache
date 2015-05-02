@@ -14,8 +14,8 @@ type redisCache struct {
 	expire int64
 }
 
-func (c redisCache) initialize(config configParams) error {
-	c.pool = c.newPool(config.redis)
+func (c *redisCache) initialize() error {
+	c.pool = newPool(config.redis)
 	c.ttl = int64(config.freshness)
 	c.expire = int64(config.expire)
 	return nil
@@ -24,14 +24,11 @@ func (c redisCache) initialize(config configParams) error {
 func (c redisCache) get(hash string) (string, string, error) {
 	var response string
 	var state string
-	var redis redis.Conn
-	var resp interface{}
-	var err error
 
-	redis = c.pool.Get()
+	redis := c.pool.Get()
 	defer redis.Close()
 
-	resp, err = redis.Do("GET", hash)
+	resp, err := redis.Do("GET", hash)
 	if err == nil {
 		if resp != nil {
 			response = resp.(string)
@@ -115,22 +112,17 @@ func (c redisCache) unlock(hash string) error {
 	return nil
 }
 
-func (c redisCache) newPool(server string) *redis.Pool {
+func newPool(server string) *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     3,
-		IdleTimeout: 240 * time.Second,
+		IdleTimeout: 2 * time.Second,
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
 			if err != nil {
+				log.Error(fmt.Sprintf("redis connection failed: %s", err.Error()))
 				return nil, err
 			}
 			return c, err
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("PING")
-			if err != nil {
-			}
-			return err
 		},
 	}
 }
