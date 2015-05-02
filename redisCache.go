@@ -85,11 +85,11 @@ func (c redisCache) lock(hash string) (bool, error) {
 	defer redis.Close()
 
 	resp, err = redis.Do("SETNX", fmt.Sprintf("lock-%s", hash), "locked")
-	fmt.Println(resp)
 	if err != nil {
 		return false, err
 	}
 	if resp == 0 {
+		log.Debug("LOCKED")
 		return false, nil
 	}
 
