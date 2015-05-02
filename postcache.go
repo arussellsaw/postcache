@@ -114,6 +114,7 @@ func (c container) getResponse(hash string, r *http.Request) (string, error) {
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			log.Error(backendURL)
+			log.Error(string(body))
 			err := fmt.Errorf("Backend error code: %v ", resp.StatusCode)
 			log.Error(err.Error())
 			return "", err
