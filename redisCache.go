@@ -18,6 +18,7 @@ func (c *redisCache) initialize() error {
 	c.pool = newPool(config.redis)
 	c.ttl = int64(config.freshness)
 	c.expire = int64(config.expire)
+	log.Info(fmt.Sprintf("redis cache initialized: %s", config.redis))
 	return nil
 }
 
