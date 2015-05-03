@@ -118,12 +118,11 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 	}
 
 	var start = time.Now()
-	defer c.telemetry.AppendAvg("postcache.backend.requesttime", float32(time.Since(start).Nanoseconds()))
 
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
-
+	c.telemetry.AppendAvg("postcache.backend.requesttime", float32(time.Since(start).Nanoseconds()))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			log.Error(backendURL)
