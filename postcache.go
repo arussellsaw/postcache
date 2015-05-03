@@ -180,8 +180,7 @@ func main() {
 	var cache = new(redisCache)
 	cache.initialize()
 
-	var telemetry = new(telemetry.Telemetry)
-	telemetry.Initialize()
+	var telemetry = telemetry.New()
 	telemetry.Average.New("postcache.backend.requesttime", (60 * time.Second))
 	telemetry.Counter.New("postcache.cache.hit", (60 * time.Second))
 	telemetry.Counter.New("postcache.cache.miss", (60 * time.Second))
