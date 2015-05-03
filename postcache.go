@@ -12,12 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/arussellsaw/telemetry"
 	"github.com/fatih/color"
 	"github.com/op/go-logging"
 )
 
 type container struct {
-	cache cacher
+	cache     cacher
+	telemetry *telemetry.Telemetry
 }
 
 type configParams struct {
@@ -42,7 +44,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	var response string
 	var err error
 	if r.Method == "POST" {
-
+		c.telemetry.AppendCounter("postcache.requests.post", float32(1))
 		body, _ := ioutil.ReadAll(r.Body)
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
@@ -55,22 +57,29 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		switch cacheStatus {
 		case "HIT":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.CyanString(cacheStatus)))
+			c.telemetry.AppendCounter("postcache.cache.hit", float32(1))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "STALE":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.WhiteString(cacheStatus)))
+			c.telemetry.AppendCounter("postcache.cache.stale", float32(1))
 			go c.asyncUpdate(hash, r, string(body))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "MISS":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString(cacheStatus)))
+			c.telemetry.AppendCounter("postcache.cache.miss", float32(1))
 			w.Header().Set("X-postcache", cacheStatus)
 			response, err = c.getResponse(hash, r, string(body))
+			if err != nil {
+				break
+			}
 			c.cache.set(hash, response)
 			w.Write([]byte(response))
 		}
 	} else {
 		w.Header().Set("X-postcache", "CANT-CACHE")
+		c.telemetry.IncrementMetric("postcache.cache.nocache", float32(1))
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				req.URL.Scheme = "http"
@@ -91,6 +100,7 @@ func (c container) asyncUpdate(hash string, r *http.Request, requestBody string)
 		defer c.cache.unlock(hash)
 		resp, err := c.getResponse(hash, r, requestBody)
 		if err != nil {
+			log.Error("backend request failed")
 			return
 		}
 		c.cache.set(hash, resp)
@@ -101,16 +111,14 @@ func (c container) asyncUpdate(hash string, r *http.Request, requestBody string)
 
 func (c container) getResponse(hash string, r *http.Request, body string) (string, error) {
 	var response string
-	var err error
 	var urlComponents = []string{
 		"http://",
 		config.backend,
 		r.URL.Path,
 	}
-	if err != nil {
-		log.Error(err.Error())
-		return "", err
-	}
+
+	var start = time.Now()
+	defer c.telemetry.AppendAvg("postcache.backend.requesttime", float32(time.Since(start).Nanoseconds()))
 
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
@@ -146,6 +154,7 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 
 	} else {
 		log.Error(fmt.Sprintf("Backend request failure: %s", httperror.Error()))
+		return "", httperror
 	}
 	return response, nil
 }
@@ -172,8 +181,18 @@ func main() {
 	var cache = new(redisCache)
 	cache.initialize()
 
-	log.Info("listening on 0.0.0.0:%s", config.listen)
+	var telemetry = new(telemetry.Telemetry)
+	telemetry.Initialize()
+	telemetry.CreateAvg("postcache.backend.requesttime", (60 * time.Second))
+	telemetry.CreateCounter("postcache.cache.hit", (60 * time.Second))
+	telemetry.CreateCounter("postcache.cache.miss", (60 * time.Second))
+	telemetry.CreateCounter("postcache.cache.stale", (60 * time.Second))
+	telemetry.CreateCounter("postcache.requests.post", (60 * time.Second))
+	log.Info("Telmetry on 0.0.0.0:9000")
 
-	http.HandleFunc("/", container{cache}.cacheHandler)
+	log.Info("listening on 0.0.0.0:%s", config.listen)
+	telemetry.Set("listen", 1)
+
+	http.HandleFunc("/", container{cache, telemetry}.cacheHandler)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
