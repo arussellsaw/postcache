@@ -82,7 +82,7 @@ func (c *nativeCache) maintainance() {
 				delete(c.store, hash)
 				delete(c.locks, hash)
 				culled++
-				tel.Counter.Add("postcache.native.cache.culls", culled)
+				tel.Total.Add("postcache.native.cache.culls", culled)
 				log.Debug(fmt.Sprintf("%s CULL", hash))
 			}
 		}

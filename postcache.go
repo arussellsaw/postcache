@@ -191,7 +191,7 @@ func main() {
 	tel.Counter.New("postcache.cache.nocache", (60 * time.Second))
 	tel.Counter.New("postcache.requests.post", (60 * time.Second))
 	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
-	tel.Counter.New("postcache.native.cache.culls", (600 * time.Second))
+	tel.Total.New("postcache.native.cache.culls", (600 * time.Second))
 	tel.Average.New("postcache.cache.speed", (300 * time.Second))
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
