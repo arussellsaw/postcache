@@ -165,8 +165,6 @@ var format = logging.MustStringFormatter(
 )
 
 func main() {
-	log.Info("Postcache!")
-
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
 	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
 	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
@@ -178,7 +176,9 @@ func main() {
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
-	var cache = new(redisCache)
+	log.Info("Postcache!")
+	//var cache = new(redisCache)
+	var cache = new(nativeCache)
 	cache.initialize()
 
 	var telemetry = telemetry.New(":9000", (time.Second * 5))
@@ -188,9 +188,9 @@ func main() {
 	telemetry.Counter.New("postcache.cache.stale", (60 * time.Second))
 	telemetry.Counter.New("postcache.cache.nocache", (60 * time.Second))
 	telemetry.Counter.New("postcache.requests.post", (60 * time.Second))
-	log.Info("Telmetry on 0.0.0.0:9000")
+	log.Info("Telemetry on 0.0.0.0:9000")
 
-	log.Info("listening on 0.0.0.0:%s", config.listen)
+	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache, telemetry}.cacheHandler)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
