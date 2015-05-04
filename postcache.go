@@ -159,29 +159,30 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 }
 
 var config configParams
-var log = logging.MustGetLogger("example")
+var log = logging.MustGetLogger("postcache")
 var format = logging.MustStringFormatter(
 	"%{color}%{time:15:04:05.000} >> %{level:.4s} %{color:reset} %{message}",
 )
 
 func main() {
+	log.Info("Postcache!")
+
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
 	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
 	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
 	flag.IntVar(&config.expire, "e", 7200, "TTL of cache values (seconds)")
 	flag.IntVar(&config.freshness, "f", 300, "age at which a cache becomes STALE (seconds)")
 	flag.Parse()
+
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
-	log.Info("Postcache!")
-
 	var cache = new(redisCache)
 	cache.initialize()
 
-	var telemetry = telemetry.New()
-	telemetry.Average.New("postcache.backend.requesttime", (60 * time.Second))
+	var telemetry = telemetry.New(":9000", (time.Second * 5))
+	telemetry.Average.New("postcache.backend.requesttime", (600 * time.Second))
 	telemetry.Counter.New("postcache.cache.hit", (60 * time.Second))
 	telemetry.Counter.New("postcache.cache.miss", (60 * time.Second))
 	telemetry.Counter.New("postcache.cache.stale", (60 * time.Second))
