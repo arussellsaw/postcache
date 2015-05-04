@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"unsafe"
 )
 
 type nativeCache struct {
@@ -74,19 +73,19 @@ func (c *nativeCache) unlock(hash string) error {
 }
 
 func (c *nativeCache) maintainance() {
-	var size float32
 	log.Debug("Native cache maintainance started")
 	for {
 		tel.Current.Add("postcache.native.cache.items", float32(len(c.store)))
+		var culled float32
 		for hash := range c.store {
 			if time.Since(c.store[hash].timestamp) > c.expire {
 				delete(c.store, hash)
 				delete(c.locks, hash)
-				size = size + float32(unsafe.Sizeof(c.store[hash].payload))
+				culled++
+				tel.Current.Add("postcache.native.cache.culls", culled)
 				log.Debug(fmt.Sprintf("%s CULL", hash))
 			}
 		}
-		tel.Current.Add("postcache.native.cache.size", size)
 		time.Sleep((1 * time.Second))
 	}
 }

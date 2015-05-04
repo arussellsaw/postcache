@@ -189,6 +189,7 @@ func main() {
 	tel.Counter.New("postcache.cache.nocache", (60 * time.Second))
 	tel.Counter.New("postcache.requests.post", (60 * time.Second))
 	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
+	tel.Current.New("postcache.native.cache.culls", (0 * time.Second))
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache}.cacheHandler)
