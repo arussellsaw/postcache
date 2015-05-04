@@ -50,7 +50,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		hash := hex.EncodeToString(sum[:16])
 		start := time.Now()
 		cacheResponse, cacheStatus, err = c.cache.get(hash)
-		tel.Average.Add("postcache.cache.speed", float32(time.Since(start).Nanoseconds()/1000000))
+		tel.Average.Add("postcache.cache.speed", float32(time.Since(start).Nanoseconds()))
 		if err != nil {
 			log.Error(err.Error())
 			return
