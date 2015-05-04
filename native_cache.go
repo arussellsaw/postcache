@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 type nativeCache struct {
@@ -22,6 +23,7 @@ type item struct {
 func (c *nativeCache) initialize() error {
 	log.Info("Native cache initialized")
 	c.store = make(map[string]item)
+	c.locks = make(map[string]bool)
 	c.freshness = time.Duration((config.freshness * 1000000000))
 	c.expire = time.Duration((config.expire * 1000000000))
 	go c.maintainance()
@@ -74,6 +76,8 @@ func (c *nativeCache) unlock(hash string) error {
 func (c *nativeCache) maintainance() {
 	log.Debug("Native cache maintainance started")
 	for {
+		tel.Current.Add("postcache.native.cache.items", float32(len(c.store)))
+		tel.Current.Add("postcache.native.cache.size", float32(unsafe.Sizeof(c.store)))
 		for hash := range c.store {
 			if time.Since(c.store[hash].timestamp) > c.expire {
 				delete(c.store, hash)

@@ -18,8 +18,7 @@ import (
 )
 
 type container struct {
-	cache     cacher
-	telemetry *telemetry.Telemetry
+	cache cacher
 }
 
 type configParams struct {
@@ -44,7 +43,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	var response string
 	var err error
 	if r.Method == "POST" {
-		c.telemetry.Counter.Add("postcache.requests.post", float32(1))
+		tel.Counter.Add("postcache.requests.post", float32(1))
 		body, _ := ioutil.ReadAll(r.Body)
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
@@ -57,18 +56,18 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		switch cacheStatus {
 		case "HIT":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.CyanString(cacheStatus)))
-			c.telemetry.Counter.Add("postcache.cache.hit", float32(1))
+			tel.Counter.Add("postcache.cache.hit", float32(1))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "STALE":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.WhiteString(cacheStatus)))
-			c.telemetry.Counter.Add("postcache.cache.stale", float32(1))
+			tel.Counter.Add("postcache.cache.stale", float32(1))
 			go c.asyncUpdate(hash, r, string(body))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "MISS":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString(cacheStatus)))
-			c.telemetry.Counter.Add("postcache.cache.miss", float32(1))
+			tel.Counter.Add("postcache.cache.miss", float32(1))
 			w.Header().Set("X-postcache", cacheStatus)
 			response, err = c.getResponse(hash, r, string(body))
 			if err != nil {
@@ -79,7 +78,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		w.Header().Set("X-postcache", "CANT-CACHE")
-		c.telemetry.Counter.Add("postcache.cache.nocache", float32(1))
+		tel.Counter.Add("postcache.cache.nocache", float32(1))
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				req.URL.Scheme = "http"
@@ -122,7 +121,7 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
-	c.telemetry.Average.Add("postcache.backend.requesttime", float32((time.Since(start).Nanoseconds())/1000000))
+	tel.Average.Add("postcache.backend.requesttime", float32((time.Since(start).Nanoseconds())/1000000))
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			log.Error(backendURL)
@@ -159,6 +158,7 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 }
 
 var config configParams
+var tel = *telemetry.New(":9000", (time.Second * 5))
 var log = logging.MustGetLogger("postcache")
 var format = logging.MustStringFormatter(
 	"%{color}%{time:15:04:05.000} >> %{level:.4s} %{color:reset} %{message}",
@@ -181,16 +181,16 @@ func main() {
 	var cache = new(nativeCache)
 	cache.initialize()
 
-	var telemetry = telemetry.New(":9000", (time.Second * 5))
-	telemetry.Average.New("postcache.backend.requesttime", (600 * time.Second))
-	telemetry.Counter.New("postcache.cache.hit", (60 * time.Second))
-	telemetry.Counter.New("postcache.cache.miss", (60 * time.Second))
-	telemetry.Counter.New("postcache.cache.stale", (60 * time.Second))
-	telemetry.Counter.New("postcache.cache.nocache", (60 * time.Second))
-	telemetry.Counter.New("postcache.requests.post", (60 * time.Second))
 	log.Info("Telemetry on 0.0.0.0:9000")
+	tel.Average.New("postcache.backend.requesttime", (600 * time.Second))
+	tel.Counter.New("postcache.cache.hit", (60 * time.Second))
+	tel.Counter.New("postcache.cache.miss", (60 * time.Second))
+	tel.Counter.New("postcache.cache.stale", (60 * time.Second))
+	tel.Counter.New("postcache.cache.nocache", (60 * time.Second))
+	tel.Counter.New("postcache.requests.post", (60 * time.Second))
+	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
-	http.HandleFunc("/", container{cache, telemetry}.cacheHandler)
+	http.HandleFunc("/", container{cache}.cacheHandler)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
