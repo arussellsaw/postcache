@@ -48,7 +48,9 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
+		start := time.Now()
 		cacheResponse, cacheStatus, err = c.cache.get(hash)
+		tel.Average.Add("postcache.cache.speed", float32(time.Since(start).Nanoseconds()/1000000))
 		if err != nil {
 			log.Error(err.Error())
 			return
@@ -189,7 +191,8 @@ func main() {
 	tel.Counter.New("postcache.cache.nocache", (60 * time.Second))
 	tel.Counter.New("postcache.requests.post", (60 * time.Second))
 	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
-	tel.Current.New("postcache.native.cache.culls", (0 * time.Second))
+	tel.Counter.New("postcache.native.cache.culls", (600 * time.Second))
+	tel.Average.New("postcache.cache.speed", (300 * time.Second))
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache}.cacheHandler)
