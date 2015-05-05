@@ -160,21 +160,21 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 }
 
 var config configParams
-var tel = *telemetry.New(":9000", (time.Second * 5))
+var tel, telemetryHandler = telemetry.New((time.Second * 5))
 var log = logging.MustGetLogger("postcache")
-var format = logging.MustStringFormatter(
-	"%{color}%{time:15:04:05.000} >> %{level:.4s} %{color:reset} %{message}",
-)
 
 func main() {
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
 	flag.StringVar(&config.listen, "l", "8081", "port to listen on")
 	flag.StringVar(&config.redis, "r", "127.0.0.1:6379", "address of redis server")
-	flag.IntVar(&config.expire, "e", 7200, "TTL of cache values (seconds)")
+	flag.IntVar(&config.expire, "e", 3600, "TTL of cache values (seconds)")
 	flag.IntVar(&config.freshness, "f", 300, "age at which a cache becomes STALE (seconds)")
 	flag.Parse()
 
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	format := logging.MustStringFormatter(
+		"%{color}%{time:15:04:05.000} >> %{level:.4s} %{color:reset} %{message}",
+	)
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
@@ -183,7 +183,7 @@ func main() {
 	var cache = new(nativeCache)
 	cache.initialize()
 
-	log.Info("Telemetry on 0.0.0.0:9000")
+	log.Info(fmt.Sprintf("Telemetry on 0.0.0.0:%s/postcache/metrics", config.listen))
 	tel.Average.New("postcache.backend.requesttime", (600 * time.Second))
 	tel.Counter.New("postcache.cache.hit", (60 * time.Second))
 	tel.Counter.New("postcache.cache.miss", (60 * time.Second))
@@ -196,5 +196,6 @@ func main() {
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache}.cacheHandler)
+	http.HandleFunc("/postcache/metrics", telemetryHandler.ServeHTTP)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
