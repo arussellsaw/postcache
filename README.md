@@ -1,5 +1,7 @@
 # postcache
 
+[![build-status](https://travis-ci.org/arussellsaw/postcache.svg?branch=develop)](https://travis-ci.org/arussellsaw/postcache)
+
 A very aggressive stupid caching reverse proxy (belligerent caching?).
 
 Designed to be used with KairosDB to alleviate load on Kairos/Cassandra.  
