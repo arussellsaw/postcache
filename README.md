@@ -6,7 +6,7 @@ A very aggressive stupid caching reverse proxy (belligerent caching?).
 
 Designed to be used with KairosDB to alleviate load on Kairos/Cassandra.  
 
-Caches response body from POST requests in redis for 5 minutes, returns body from cache on identical requests.
+Caches response body from POST requests for 5 minutes, returns body from cache on identical requests.
 
 ###Usage:  
 ```./postcache -b 'kairosdb.example.com:8080' ```
@@ -16,7 +16,7 @@ Caches response body from POST requests in redis for 5 minutes, returns body fro
 * `-l` `8081`
     * port to listen on
 * `-r` `127.0.0.1:6379`
-    * address of redis-server
+    * address of redis-server (if redisCache cacher is used)
 * `-e` `7200`
     * TTL of keys in redis (seconds)
 * `-f` `300`
