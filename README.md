@@ -14,7 +14,7 @@ Caches response body from POST requests for 5 minutes, returns body from cache o
 * `-l` `8081`
     * port to listen on
 * `-r` `127.0.0.1:6379`
-    * address of redis-server (if rediCache cacher is used)
+    * address of redis-server (if redisCache cacher is used)
 * `-e` `7200`
     * TTL of keys in redis (seconds)
 * `-f` `300`
