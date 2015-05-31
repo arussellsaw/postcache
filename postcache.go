@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/arussellsaw/telemetry"
+	"github.com/arussellsaw/telemetry/builtin"
 	"github.com/fatih/color"
 	"github.com/op/go-logging"
 )
@@ -193,6 +194,12 @@ func main() {
 	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
 	tel.Total.New("postcache.native.cache.culls", (600 * time.Second))
 	tel.Average.New("postcache.cache.speed", (300 * time.Second))
+	tel.Annotation.New("postcache.alerts", (60 * time.Second))
+	tel.Annotation.Add("postcache.alerts", "postcache started")
+	runtimeMetrics := builtin.Runtime{
+		Telemetry: tel,
+		Prefix:    "postcache"}
+	runtimeMetrics.Record()
 
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache}.cacheHandler)
