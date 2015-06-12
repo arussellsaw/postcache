@@ -75,14 +75,14 @@ func (c *nativeCache) unlock(hash string) error {
 func (c *nativeCache) maintainance() {
 	log.Debug("Native cache maintainance started")
 	for {
-		tel.Current.Add("postcache.native.cache.items", float32(len(c.store)))
-		var culled float32
+		metrics["native.cache.items"].Add(tel, float64(len(c.store)))
+		var culled float64
 		for hash := range c.store {
 			if time.Since(c.store[hash].timestamp) > c.expire {
 				delete(c.store, hash)
 				delete(c.locks, hash)
 				culled++
-				tel.Total.Add("postcache.native.cache.culls", culled)
+				metrics["native.cache.culls"].Add(tel, culled)
 				log.Debug(fmt.Sprintf("%s CULL", hash))
 			}
 		}

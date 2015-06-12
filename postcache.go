@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/arussellsaw/telemetry"
-	"github.com/arussellsaw/telemetry/builtin"
+	"github.com/arussellsaw/telemetry/reporters"
 	"github.com/fatih/color"
 	"github.com/op/go-logging"
 )
@@ -44,33 +44,29 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 	var response string
 	var err error
 	if r.Method == "POST" {
-		tel.Counter.Add("postcache.requests.post", float32(1))
+		metrics["requests.post"].Add(tel, float64(1))
 		body, _ := ioutil.ReadAll(r.Body)
 		identifier := []byte(fmt.Sprintf("%s%s", body, r.URL.Path))
 		sum := md5.Sum(identifier)
 		hash := hex.EncodeToString(sum[:16])
 		start := time.Now()
 		cacheResponse, cacheStatus, err = c.cache.get(hash)
-		tel.Average.Add("postcache.cache.speed", float32(time.Since(start).Nanoseconds()))
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
+		metrics["cache.speed"].Add(tel, float64(time.Since(start).Nanoseconds()))
 		switch cacheStatus {
 		case "HIT":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.CyanString(cacheStatus)))
-			tel.Counter.Add("postcache.cache.hit", float32(1))
+			metrics["cache.hit"].Add(tel, float64(1))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "STALE":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.WhiteString(cacheStatus)))
-			tel.Counter.Add("postcache.cache.stale", float32(1))
+			metrics["cache.stale"].Add(tel, float64(1))
 			go c.asyncUpdate(hash, r, string(body))
 			w.Header().Set("X-Postcache", cacheStatus)
 			w.Write([]byte(cacheResponse))
 		case "MISS":
 			log.Debug(fmt.Sprintf("%s %s", hash, color.RedString(cacheStatus)))
-			tel.Counter.Add("postcache.cache.miss", float32(1))
+			metrics["cache.miss"].Add(tel, float64(1))
 			w.Header().Set("X-postcache", cacheStatus)
 			response, err = c.getResponse(hash, r, string(body))
 			if err != nil {
@@ -81,7 +77,7 @@ func (c container) cacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		w.Header().Set("X-postcache", "CANT-CACHE")
-		tel.Counter.Add("postcache.cache.nocache", float32(1))
+		metrics["cache.nocache"].Add(tel, float64(1))
 		proxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				req.URL.Scheme = "http"
@@ -124,7 +120,7 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 	backendURL := strings.Join(urlComponents, "")
 	httpClient := http.Client{Timeout: time.Duration(600 * time.Second)}
 	resp, httperror := httpClient.Post(backendURL, "application/JSON", strings.NewReader(body))
-	tel.Average.Add("postcache.backend.requesttime", float32((time.Since(start).Nanoseconds())/1000000))
+	metrics["backend.requesttime"].Add(tel, float64(time.Since(start).Nanoseconds())/1000000)
 	if httperror == nil {
 		if resp.StatusCode != 200 {
 			log.Error(backendURL)
@@ -161,8 +157,9 @@ func (c container) getResponse(hash string, r *http.Request, body string) (strin
 }
 
 var config configParams
-var tel, telemetryHandler = telemetry.New((time.Second * 5))
+var tel = telemetry.New("postcache.", (time.Second * 5))
 var log = logging.MustGetLogger("postcache")
+var metrics = make(map[string]telemetry.Metric)
 
 func main() {
 	flag.StringVar(&config.backend, "b", "127.0.0.1:8080", "address of backend server")
@@ -179,30 +176,27 @@ func main() {
 	backendFormatter := logging.NewBackendFormatter(backend, format)
 	logging.SetBackend(backendFormatter)
 
+	metrics["backend.requesttime"] = telemetry.NewAverage(tel, "backend.requesttime", 600*time.Second)
+	metrics["cache.hit"] = telemetry.NewCounter(tel, "cache.hit", 60*time.Second)
+	metrics["cache.miss"] = telemetry.NewCounter(tel, "cache.miss", 60*time.Second)
+	metrics["cache.stale"] = telemetry.NewCounter(tel, "cache.stale", 60*time.Second)
+	metrics["cache.nocache"] = telemetry.NewCounter(tel, "cache.nocache", 60*time.Second)
+	metrics["requests.post"] = telemetry.NewCounter(tel, "requests.post", 60*time.Second)
+	metrics["native.cache.items"] = telemetry.NewCurrent(tel, "native.cache.items", 0*time.Second)
+	metrics["native.cache.culls"] = telemetry.NewTotal(tel, "native.cache.culls", 0*time.Second)
+	metrics["cache.speed"] = telemetry.NewAverage(tel, "cache.speed", 300*time.Second)
+
+	telemetryHandler := reporters.TelemetryHandler{
+		Tel: tel,
+	}
+
 	log.Info("Postcache!")
 	//var cache = new(redisCache)
 	var cache = new(nativeCache)
 	cache.initialize()
 
-	log.Info(fmt.Sprintf("Telemetry on 0.0.0.0:%s/postcache/metrics", config.listen))
-	tel.Average.New("postcache.backend.requesttime", (600 * time.Second))
-	tel.Counter.New("postcache.cache.hit", (60 * time.Second))
-	tel.Counter.New("postcache.cache.miss", (60 * time.Second))
-	tel.Counter.New("postcache.cache.stale", (60 * time.Second))
-	tel.Counter.New("postcache.cache.nocache", (60 * time.Second))
-	tel.Counter.New("postcache.requests.post", (60 * time.Second))
-	tel.Current.New("postcache.native.cache.items", (0 * time.Second))
-	tel.Total.New("postcache.native.cache.culls", (600 * time.Second))
-	tel.Average.New("postcache.cache.speed", (300 * time.Second))
-	tel.Annotation.New("postcache.alerts", (60 * time.Second))
-	tel.Annotation.Add("postcache.alerts", "postcache started")
-	runtimeMetrics := builtin.Runtime{
-		Telemetry: tel,
-		Prefix:    "postcache"}
-	runtimeMetrics.Record()
-
 	log.Info("Listening on 0.0.0.0:%s", config.listen)
 	http.HandleFunc("/", container{cache}.cacheHandler)
-	http.HandleFunc("/postcache/metrics", telemetryHandler.ServeHTTP)
+	http.HandleFunc("/postcache/telemetry", telemetryHandler.ServeHTTP)
 	http.ListenAndServe(fmt.Sprintf(":%s", config.listen), nil)
 }
